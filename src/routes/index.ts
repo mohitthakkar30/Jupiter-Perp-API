@@ -13,3 +13,6 @@ export { pdaRoutes } from "./pda";
 export { eventRoutes } from "./events";
 export { simulationRoutes } from "./simulation";
 export { remainingAccountsRoutes } from "./remaining-accounts";
+export { liquidationScenarioRoutes } from "./liquidation-scenario";
+export { historyRoutes } from "./history";
+export { websocketRoutes } from "./websocket";

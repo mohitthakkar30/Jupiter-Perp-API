@@ -1,5 +1,6 @@
 import Fastify, { FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
+import websocket from "@fastify/websocket";
 import {
   positionRoutes,
   poolRoutes,
@@ -16,6 +17,9 @@ import {
   eventRoutes,
   simulationRoutes,
   remainingAccountsRoutes,
+  liquidationScenarioRoutes,
+  historyRoutes,
+  websocketRoutes,
 } from "./routes";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -27,6 +31,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await fastify.register(cors, {
     origin: true,
   });
+
+  // Register WebSocket support
+  await fastify.register(websocket);
 
   // Health check
   fastify.get("/health", async () => {
@@ -158,6 +165,22 @@ export async function buildApp(): Promise<FastifyInstance> {
         advancedFees: {
           "POST /fees/price-impact/detailed": "Calculate detailed price impact with delta imbalance",
         },
+        liquidationScenarios: {
+          "POST /positions/liquidation-scenario": "Analyze liquidation scenarios at various prices",
+          "GET /positions/:positionPubkey/liquidation-scenario": "Quick liquidation scenario analysis",
+        },
+        history: {
+          "GET /custodies/:token/funding-rate/history": "Get historical funding rates",
+          "GET /analytics/volume/history": "Get historical trading volume",
+          "GET /analytics/volume/stats": "Get volume statistics summary",
+        },
+        websocket: {
+          "WS /ws/positions/:wallet": "Real-time position updates for wallet",
+          "WS /ws/pool/aum": "Real-time pool AUM updates",
+          "WS /ws/custodies": "Real-time all custody updates",
+          "WS /ws/custodies/:token": "Real-time specific custody updates",
+          "GET /ws/stats": "Get WebSocket connection statistics",
+        },
       },
     };
   });
@@ -178,6 +201,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await fastify.register(eventRoutes);
   await fastify.register(simulationRoutes);
   await fastify.register(remainingAccountsRoutes);
+  await fastify.register(liquidationScenarioRoutes);
+  await fastify.register(historyRoutes);
+  await fastify.register(websocketRoutes);
 
   return fastify;
 }

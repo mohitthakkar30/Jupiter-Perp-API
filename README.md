@@ -19,6 +19,9 @@ A comprehensive Fastify API for interacting with Jupiter Perpetuals on Solana. F
 - **PDA Generation**: Generate Position and PositionRequest PDAs programmatically
 - **Transaction Simulation**: Simulate transactions, estimate compute units and fees
 - **Remaining Accounts**: Get custody metadata and oracle accounts for instructions
+- **Liquidation Scenarios**: "What-if" analysis for position liquidation at various price points
+- **Historical Data**: Funding rate history and volume history tracking
+- **WebSocket Streaming**: Real-time position, pool, and custody updates via WebSocket
 - Vercel-ready for serverless deployment
 
 ## Prerequisites
@@ -196,6 +199,31 @@ npm start
 | `GET /accounts/oracles` | Get all oracle account metadata |
 | `GET /accounts/remaining/:instruction` | Get remaining accounts for instruction type |
 | `GET /accounts/token-accounts` | Get custody token accounts |
+
+### Liquidation Scenario Analysis
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /positions/liquidation-scenario` | Analyze liquidation scenarios at various price points |
+| `GET /positions/:positionPubkey/liquidation-scenario` | Quick liquidation scenario analysis with defaults |
+
+### Historical Data
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /custodies/:token/funding-rate/history` | Get historical funding rates (query: ?limit=24&interval=hourly) |
+| `GET /analytics/volume/history` | Get historical trading volume (query: ?limit=7&interval=daily&token=SOL) |
+| `GET /analytics/volume/stats` | Get volume statistics summary (query: ?days=7&token=SOL) |
+
+### WebSocket Streaming
+
+| Endpoint | Description |
+|----------|-------------|
+| `WS /ws/positions/:wallet` | Real-time position updates for a wallet |
+| `WS /ws/pool/aum` | Real-time pool AUM updates |
+| `WS /ws/custodies` | Real-time all custody updates |
+| `WS /ws/custodies/:token` | Real-time specific custody updates |
+| `GET /ws/stats` | Get WebSocket connection statistics |
 
 ### Trade (Write Endpoints)
 
@@ -446,6 +474,41 @@ curl http://localhost:3001/accounts/remaining/increasePosition
 
 # Get custody token accounts
 curl http://localhost:3001/accounts/token-accounts
+
+# Analyze liquidation scenarios for a position
+curl -X POST http://localhost:3001/positions/liquidation-scenario \
+  -H "Content-Type: application/json" \
+  -d '{
+    "positionPubkey": "YOUR_POSITION_PUBKEY",
+    "percentageScenarios": [-30, -20, -10, -5, 0, 5, 10, 20]
+  }'
+
+# Quick liquidation scenario analysis
+curl http://localhost:3001/positions/YOUR_POSITION_PUBKEY/liquidation-scenario
+
+# Get funding rate history for SOL
+curl "http://localhost:3001/custodies/SOL/funding-rate/history?limit=24&interval=hourly"
+
+# Get trading volume history
+curl "http://localhost:3001/analytics/volume/history?limit=7&interval=daily"
+
+# Get trading volume history for specific token
+curl "http://localhost:3001/analytics/volume/history?limit=7&interval=daily&token=SOL"
+
+# Get volume statistics
+curl "http://localhost:3001/analytics/volume/stats?days=7"
+
+# Connect to WebSocket for position updates (use wscat or similar)
+# wscat -c ws://localhost:3001/ws/positions/YOUR_WALLET_ADDRESS
+
+# Connect to WebSocket for pool AUM updates
+# wscat -c ws://localhost:3001/ws/pool/aum
+
+# Connect to WebSocket for custody updates
+# wscat -c ws://localhost:3001/ws/custodies/SOL
+
+# Get WebSocket connection stats
+curl http://localhost:3001/ws/stats
 ```
 
 ## Vercel Deployment
