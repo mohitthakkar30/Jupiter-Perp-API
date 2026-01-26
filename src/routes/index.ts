@@ -9,3 +9,5 @@ export { jlpRoutes } from "./jlp";
 export { positionRequestRoutes } from "./position-requests";
 export { borrowRoutes } from "./borrow";
 export { walletRoutes } from "./wallet";
+export { pdaRoutes } from "./pda";
+export { eventRoutes } from "./events";

@@ -12,6 +12,8 @@ import {
   positionRequestRoutes,
   borrowRoutes,
   walletRoutes,
+  pdaRoutes,
+  eventRoutes,
 } from "./routes";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -120,6 +122,24 @@ export async function buildApp(): Promise<FastifyInstance> {
         wallet: {
           "GET /wallet/:wallet/summary": "Get complete wallet portfolio summary",
         },
+        pda: {
+          "POST /pda/position": "Generate position PDA",
+          "POST /pda/position-request": "Generate position request PDA",
+          "POST /pda/borrow-position": "Generate borrow position PDA",
+          "GET /pda/perpetuals": "Get perpetuals global state PDA",
+        },
+        events: {
+          "GET /events": "Get all perpetuals events",
+          "GET /events/trades": "Get trade events (increase/decrease position)",
+          "GET /events/trades/:wallet": "Get trade events by wallet",
+          "GET /events/liquidations": "Get liquidation events",
+          "GET /events/liquidations/:wallet": "Get liquidation events by wallet",
+          "GET /events/tpsl": "Get TPSL execution events",
+        },
+        priceStreaming: {
+          "GET /prices/stream": "SSE stream of all token prices",
+          "GET /prices/:token/stream": "SSE stream for specific token price",
+        },
       },
     };
   });
@@ -136,6 +156,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await fastify.register(positionRequestRoutes);
   await fastify.register(borrowRoutes);
   await fastify.register(walletRoutes);
+  await fastify.register(pdaRoutes);
+  await fastify.register(eventRoutes);
 
   return fastify;
 }

@@ -74,7 +74,8 @@ export async function getGlobalLongUnrealizedPnl(): Promise<{
   for (const [custody, priceData] of Object.entries(oraclePrices)) {
     priceMap.set(custody, priceData.price);
   }
-
+  console.log("=== > ", priceMap);
+  
   let totalPnl = new BN(0);
 
   for (const position of openLongPositions) {

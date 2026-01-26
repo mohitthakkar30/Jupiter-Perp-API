@@ -7,6 +7,7 @@ A comprehensive Fastify API for interacting with Jupiter Perpetuals on Solana. F
 - **Positions**: Fetch all open positions, filter by wallet, calculate PnL, liquidation price, and borrow fees
 - **Pool & JLP**: Get pool data, AUM, APY, JLP virtual price, mint/burn calculations
 - **Prices**: Real-time oracle prices for SOL, ETH, BTC, USDC, USDT
+- **Price Streaming**: Server-Sent Events (SSE) for real-time price updates
 - **Custodies**: Complete custody data including funding rates and utilization
 - **Fees**: Calculate swap fees, price impact, and open/close position fees
 - **Analytics**: Global PnL tracking, detailed AUM breakdown, pool utilization
@@ -14,6 +15,8 @@ A comprehensive Fastify API for interacting with Jupiter Perpetuals on Solana. F
 - **Borrow Positions**: Monitor borrow positions and rates
 - **Wallet Summary**: Complete portfolio overview for any wallet
 - **Trade**: Build unsigned transactions to open/close perpetual positions
+- **Events**: Track on-chain perpetuals events (trades, liquidations, TPSL executions)
+- **PDA Generation**: Generate Position and PositionRequest PDAs programmatically
 - Vercel-ready for serverless deployment
 
 ## Prerequisites
@@ -87,6 +90,8 @@ npm start
 |----------|-------------|
 | `GET /prices` | Get all token prices |
 | `GET /prices/:token` | Get specific token price (SOL, ETH, BTC, USDC, USDT) |
+| `GET /prices/stream` | SSE stream of all token prices (query: ?interval=1000) |
+| `GET /prices/:token/stream` | SSE stream for specific token price |
 
 ### Custodies
 
@@ -149,6 +154,26 @@ npm start
 | Endpoint | Description |
 |----------|-------------|
 | `GET /wallet/:wallet/summary` | Get complete wallet portfolio summary |
+
+### Events
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /events` | Get all perpetuals events (query: ?limit=50&before=signature) |
+| `GET /events/trades` | Get trade events (increase/decrease position) |
+| `GET /events/trades/:wallet` | Get trade events by wallet |
+| `GET /events/liquidations` | Get liquidation events |
+| `GET /events/liquidations/:wallet` | Get liquidation events by wallet |
+| `GET /events/tpsl` | Get TPSL (Take Profit/Stop Loss) execution events |
+
+### PDA Generation
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /pda/position` | Generate position PDA |
+| `POST /pda/position-request` | Generate position request PDA |
+| `POST /pda/borrow-position` | Generate borrow position PDA |
+| `GET /pda/perpetuals` | Get perpetuals global state PDA |
 
 ### Trade (Write Endpoints)
 
@@ -308,6 +333,45 @@ curl http://localhost:3001/wallet/YOUR_WALLET_ADDRESS/summary
 
 # Get borrow rates for SOL custody
 curl http://localhost:3001/borrow/rates/SOL
+
+# Stream all prices (SSE)
+curl -N http://localhost:3001/prices/stream
+
+# Stream SOL price with custom interval (SSE)
+curl -N "http://localhost:3001/prices/SOL/stream?interval=500"
+
+# Get recent trade events
+curl http://localhost:3001/events/trades?limit=10
+
+# Get trade events for a wallet
+curl http://localhost:3001/events/trades/YOUR_WALLET_ADDRESS
+
+# Get liquidation events
+curl http://localhost:3001/events/liquidations
+
+# Get TPSL execution events
+curl http://localhost:3001/events/tpsl
+
+# Generate position PDA
+curl -X POST http://localhost:3001/pda/position \
+  -H "Content-Type: application/json" \
+  -d '{
+    "custody": "SOL",
+    "collateralCustody": "SOL",
+    "wallet": "YOUR_WALLET_ADDRESS",
+    "side": "long"
+  }'
+
+# Generate position request PDA
+curl -X POST http://localhost:3001/pda/position-request \
+  -H "Content-Type: application/json" \
+  -d '{
+    "positionPubkey": "YOUR_POSITION_PUBKEY",
+    "requestChange": "increase"
+  }'
+
+# Get perpetuals global state PDA
+curl http://localhost:3001/pda/perpetuals
 ```
 
 ## Vercel Deployment
