@@ -14,6 +14,8 @@ import {
   walletRoutes,
   pdaRoutes,
   eventRoutes,
+  simulationRoutes,
+  remainingAccountsRoutes,
 } from "./routes";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -140,6 +142,22 @@ export async function buildApp(): Promise<FastifyInstance> {
           "GET /prices/stream": "SSE stream of all token prices",
           "GET /prices/:token/stream": "SSE stream for specific token price",
         },
+        simulation: {
+          "POST /simulation/simulate": "Simulate transaction and get detailed results",
+          "POST /simulation/estimate-cu": "Estimate compute units",
+          "POST /simulation/estimate-fees": "Estimate transaction fees",
+          "POST /simulation/validate": "Validate transaction before signing",
+        },
+        accounts: {
+          "GET /accounts/custody-metas": "Get all custody remaining accounts",
+          "GET /accounts/custody-metas/:token": "Get custody metas for specific token",
+          "GET /accounts/oracles": "Get all oracle accounts",
+          "GET /accounts/remaining/:instruction": "Get remaining accounts for instruction",
+          "GET /accounts/token-accounts": "Get custody token accounts",
+        },
+        advancedFees: {
+          "POST /fees/price-impact/detailed": "Calculate detailed price impact with delta imbalance",
+        },
       },
     };
   });
@@ -158,6 +176,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await fastify.register(walletRoutes);
   await fastify.register(pdaRoutes);
   await fastify.register(eventRoutes);
+  await fastify.register(simulationRoutes);
+  await fastify.register(remainingAccountsRoutes);
 
   return fastify;
 }

@@ -11,3 +11,5 @@ export { borrowRoutes } from "./borrow";
 export { walletRoutes } from "./wallet";
 export { pdaRoutes } from "./pda";
 export { eventRoutes } from "./events";
+export { simulationRoutes } from "./simulation";
+export { remainingAccountsRoutes } from "./remaining-accounts";

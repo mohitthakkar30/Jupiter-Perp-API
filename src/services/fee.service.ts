@@ -299,3 +299,267 @@ export async function calculateSwapFee(params: {
     outputToken: outputToken.toUpperCase(),
   };
 }
+
+// ===== ADVANCED PRICE IMPACT WITH DELTA IMBALANCE =====
+
+export enum TradePoolType {
+  Increase = "Increase",
+  Decrease = "Decrease",
+}
+
+// Calculate base fee in USD
+export function getBaseFeeUsd(baseFeeBps: BN, amount: BN): BN {
+  if (amount.eqn(0)) {
+    return new BN(0);
+  }
+  return amount.mul(baseFeeBps).div(BPS_POWER);
+}
+
+// Calculate delta imbalance from 60-second rolling window
+export function calculateDeltaImbalance(
+  priceImpactBuffer: {
+    openInterest: BN[];
+    lastUpdated: BN;
+    feeFactor: BN;
+    maxFeeBps: BN;
+    exponent: number;
+    deltaImbalanceThresholdDecimal: BN;
+  },
+  currentTime: number,
+  newOpenInterest: BN,
+  tradeType: TradePoolType
+): BN {
+  const currentIdx = currentTime % 60;
+  const lastUpdatedIdx = priceImpactBuffer.lastUpdated.toNumber() % 60;
+
+  const amount =
+    tradeType === TradePoolType.Increase
+      ? newOpenInterest
+      : newOpenInterest.neg();
+
+  const updatedOpenInterest = [...priceImpactBuffer.openInterest];
+
+  // No values OR more than 1 minute
+  if (
+    priceImpactBuffer.lastUpdated.lten(0) ||
+    new BN(currentTime).sub(priceImpactBuffer.lastUpdated).gten(60)
+  ) {
+    return amount;
+  }
+
+  if (lastUpdatedIdx === currentIdx) {
+    updatedOpenInterest[currentIdx] = updatedOpenInterest[currentIdx].add(amount);
+  } else {
+    updatedOpenInterest[currentIdx] = amount;
+  }
+
+  // Set outdated values to 0
+  if (currentIdx > lastUpdatedIdx) {
+    // Clean from last_updated_idx+1 to current_idx
+    for (let i = lastUpdatedIdx + 1; i < currentIdx; i++) {
+      updatedOpenInterest[i] = new BN(0);
+    }
+  } else if (currentIdx < lastUpdatedIdx) {
+    // Clean from last_updated_idx+1 to end
+    for (let i = lastUpdatedIdx + 1; i < updatedOpenInterest.length; i++) {
+      updatedOpenInterest[i] = new BN(0);
+    }
+    // Clean from start to current_idx
+    for (let i = 0; i < currentIdx; i++) {
+      updatedOpenInterest[i] = new BN(0);
+    }
+  }
+
+  // Calculate the sum of all values in the array
+  return updatedOpenInterest.reduce((acc, val) => acc.add(val), new BN(0));
+}
+
+// Advanced price impact fee with delta imbalance
+export function getAdvancedPriceImpactFeeBps(
+  baseFeeBps: BN,
+  amount: BN,
+  tradePoolType: TradePoolType,
+  custody: Custody,
+  curtime: BN
+): {
+  positionFeeUsd: BN;
+  priceImpactFeeUsd: BN;
+  baseFeeUsd: BN;
+  linearImpactFeeUsd: BN;
+  deltaImbalanceFeeUsd: BN;
+  totalFeeBps: BN;
+  isCapped: boolean;
+} {
+  if (amount.eqn(0)) {
+    return {
+      positionFeeUsd: new BN(0),
+      priceImpactFeeUsd: new BN(0),
+      baseFeeUsd: new BN(0),
+      linearImpactFeeUsd: new BN(0),
+      deltaImbalanceFeeUsd: new BN(0),
+      totalFeeBps: new BN(0),
+      isCapped: false,
+    };
+  }
+
+  const priceImpactBuffer = custody.priceImpactBuffer;
+  const linearImpactFeeCoefficientBps = getLinearPriceImpactFeeBps(
+    amount,
+    custody.pricing.tradeImpactFeeScalar
+  );
+  const totalBaseFeeBps = linearImpactFeeCoefficientBps.add(baseFeeBps);
+  const linearImpactFeeUsd = divCeil(
+    amount.mul(linearImpactFeeCoefficientBps),
+    BPS_POWER
+  );
+  const baseFeeUsd = getBaseFeeUsd(baseFeeBps, amount);
+  let positionFeeUsd = divCeil(amount.mul(totalBaseFeeBps), BPS_POWER);
+
+  // If no delta imbalance tracking, return simple calculation
+  if (!priceImpactBuffer || priceImpactBuffer.feeFactor.eq(new BN(0))) {
+    return {
+      positionFeeUsd,
+      priceImpactFeeUsd: linearImpactFeeUsd,
+      baseFeeUsd,
+      linearImpactFeeUsd,
+      deltaImbalanceFeeUsd: new BN(0),
+      totalFeeBps: totalBaseFeeBps,
+      isCapped: false,
+    };
+  }
+
+  const deltaImbalanceDecimal = calculateDeltaImbalance(
+    priceImpactBuffer,
+    curtime.toNumber(),
+    amount,
+    tradePoolType
+  ).abs();
+
+  // If delta imbalance is below threshold, return simple calculation
+  if (deltaImbalanceDecimal.lte(priceImpactBuffer.deltaImbalanceThresholdDecimal)) {
+    return {
+      positionFeeUsd,
+      priceImpactFeeUsd: linearImpactFeeUsd,
+      baseFeeUsd,
+      linearImpactFeeUsd,
+      deltaImbalanceFeeUsd: new BN(0),
+      totalFeeBps: totalBaseFeeBps,
+      isCapped: false,
+    };
+  }
+
+  // Calculate delta imbalance fee using exponent scaling
+  // Simplified calculation without Decimal library
+  const ratio = deltaImbalanceDecimal
+    .mul(new BN(10000))
+    .div(priceImpactBuffer.deltaImbalanceThresholdDecimal);
+
+  // Apply exponent (simplified - using square for exponent=2)
+  let deltaImbalanceAmount: BN;
+  if (priceImpactBuffer.exponent === 2) {
+    deltaImbalanceAmount = ratio.mul(ratio).div(new BN(10000));
+  } else {
+    deltaImbalanceAmount = ratio;
+  }
+
+  const priceImpactFeeBps = divCeil(
+    deltaImbalanceAmount,
+    priceImpactBuffer.feeFactor
+  );
+  const totalFeeBps = totalBaseFeeBps.add(priceImpactFeeBps);
+  const isCapped = totalFeeBps.gt(priceImpactBuffer.maxFeeBps);
+  const cappedTotalFeeBps = BN.min(totalFeeBps, priceImpactBuffer.maxFeeBps);
+
+  positionFeeUsd = divCeil(amount.mul(cappedTotalFeeBps), BPS_POWER);
+  const deltaImbalanceFeeUsd = positionFeeUsd.sub(baseFeeUsd).sub(linearImpactFeeUsd);
+
+  return {
+    positionFeeUsd,
+    priceImpactFeeUsd: positionFeeUsd.sub(baseFeeUsd),
+    baseFeeUsd,
+    linearImpactFeeUsd,
+    deltaImbalanceFeeUsd: BN.max(deltaImbalanceFeeUsd, new BN(0)),
+    totalFeeBps: cappedTotalFeeBps,
+    isCapped,
+  };
+}
+
+// Detailed price impact fee breakdown
+export async function calculateDetailedPriceImpact(
+  custodyOrToken: string,
+  tradeSizeUsd: string,
+  tradeType: "increase" | "decrease"
+): Promise<{
+  baseFeeUsd: string;
+  baseFeeFormatted: string;
+  linearImpactFeeUsd: string;
+  linearImpactFormatted: string;
+  deltaImbalanceFeeUsd: string;
+  deltaImbalanceFormatted: string;
+  totalFeeUsd: string;
+  totalFeeFormatted: string;
+  totalFeeBps: string;
+  isCapped: boolean;
+  maxFeeBps: string;
+  breakdown: {
+    baseFeePercentage: string;
+    linearImpactPercentage: string;
+    deltaImbalancePercentage: string;
+    totalPercentage: string;
+  };
+}> {
+  const custodyPubkey = TOKEN_TO_CUSTODY[custodyOrToken.toUpperCase()] || custodyOrToken;
+  const custody = await getCustodyData(custodyPubkey);
+
+  const tradeSizeBN = new BN(tradeSizeUsd);
+  const tradePoolType =
+    tradeType === "increase" ? TradePoolType.Increase : TradePoolType.Decrease;
+  const baseFeeBps =
+    tradeType === "increase"
+      ? custody.increasePositionBps
+      : custody.decreasePositionBps;
+
+  const curtime = new BN(Math.floor(Date.now() / 1000));
+
+  const result = getAdvancedPriceImpactFeeBps(
+    baseFeeBps,
+    tradeSizeBN,
+    tradePoolType,
+    custody,
+    curtime
+  );
+
+  const maxFeeBps = custody.priceImpactBuffer?.maxFeeBps || new BN(500);
+
+  // Calculate percentages
+  const baseFeePercentage = (baseFeeBps.toNumber() / 100).toFixed(4);
+  const linearImpactBps = result.linearImpactFeeUsd
+    .mul(BPS_POWER)
+    .div(tradeSizeBN.eqn(0) ? new BN(1) : tradeSizeBN);
+  const linearImpactPercentage = (linearImpactBps.toNumber() / 100).toFixed(4);
+  const deltaImbalanceBps = result.deltaImbalanceFeeUsd
+    .mul(BPS_POWER)
+    .div(tradeSizeBN.eqn(0) ? new BN(1) : tradeSizeBN);
+  const deltaImbalancePercentage = (deltaImbalanceBps.toNumber() / 100).toFixed(4);
+  const totalPercentage = (result.totalFeeBps.toNumber() / 100).toFixed(4);
+
+  return {
+    baseFeeUsd: result.baseFeeUsd.toString(),
+    baseFeeFormatted: BNToUSDRepresentation(result.baseFeeUsd, USDC_DECIMALS),
+    linearImpactFeeUsd: result.linearImpactFeeUsd.toString(),
+    linearImpactFormatted: BNToUSDRepresentation(result.linearImpactFeeUsd, USDC_DECIMALS),
+    deltaImbalanceFeeUsd: result.deltaImbalanceFeeUsd.toString(),
+    deltaImbalanceFormatted: BNToUSDRepresentation(result.deltaImbalanceFeeUsd, USDC_DECIMALS),
+    totalFeeUsd: result.positionFeeUsd.toString(),
+    totalFeeFormatted: BNToUSDRepresentation(result.positionFeeUsd, USDC_DECIMALS),
+    totalFeeBps: result.totalFeeBps.toString(),
+    isCapped: result.isCapped,
+    maxFeeBps: maxFeeBps.toString(),
+    breakdown: {
+      baseFeePercentage: `${baseFeePercentage}%`,
+      linearImpactPercentage: `${linearImpactPercentage}%`,
+      deltaImbalancePercentage: `${deltaImbalancePercentage}%`,
+      totalPercentage: `${totalPercentage}%`,
+    },
+  };
+}

@@ -5,6 +5,7 @@ import {
   getCloseFeeForCustody,
   calculatePriceImpactFee,
   calculateSwapFee,
+  calculateDetailedPriceImpact,
 } from "../services/fee.service";
 
 interface SwapFeeBody {
@@ -17,6 +18,12 @@ interface PriceImpactBody {
   custody: string;
   tradeSizeUsd: string;
   isIncrease?: boolean;
+}
+
+interface DetailedPriceImpactBody {
+  custody: string;
+  tradeSizeUsd: string;
+  tradeType: "increase" | "decrease";
 }
 
 export async function feeRoutes(fastify: FastifyInstance) {
@@ -124,4 +131,43 @@ export async function feeRoutes(fastify: FastifyInstance) {
       });
     }
   });
+
+  // Calculate detailed price impact with delta imbalance
+  fastify.post<{ Body: DetailedPriceImpactBody }>(
+    "/fees/price-impact/detailed",
+    async (request, reply) => {
+      try {
+        const { custody, tradeSizeUsd, tradeType } = request.body;
+
+        if (!custody || !tradeSizeUsd || !tradeType) {
+          return reply.status(400).send({
+            success: false,
+            error: "Missing required fields: custody, tradeSizeUsd, tradeType",
+          });
+        }
+
+        if (tradeType !== "increase" && tradeType !== "decrease") {
+          return reply.status(400).send({
+            success: false,
+            error: "tradeType must be 'increase' or 'decrease'",
+          });
+        }
+
+        const result = await calculateDetailedPriceImpact(
+          custody,
+          tradeSizeUsd,
+          tradeType
+        );
+        return { success: true, data: result };
+      } catch (error) {
+        fastify.log.error(error);
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        return reply.status(500).send({
+          success: false,
+          error: `Failed to calculate detailed price impact: ${errorMessage}`,
+        });
+      }
+    }
+  );
 }

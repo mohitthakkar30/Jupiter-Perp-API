@@ -17,6 +17,8 @@ A comprehensive Fastify API for interacting with Jupiter Perpetuals on Solana. F
 - **Trade**: Build unsigned transactions to open/close perpetual positions
 - **Events**: Track on-chain perpetuals events (trades, liquidations, TPSL executions)
 - **PDA Generation**: Generate Position and PositionRequest PDAs programmatically
+- **Transaction Simulation**: Simulate transactions, estimate compute units and fees
+- **Remaining Accounts**: Get custody metadata and oracle accounts for instructions
 - Vercel-ready for serverless deployment
 
 ## Prerequisites
@@ -111,6 +113,7 @@ npm start
 | `GET /fees/close/:custody` | Get close position fee for a custody |
 | `POST /fees/price-impact` | Calculate price impact fee |
 | `POST /fees/swap` | Calculate swap fee and output amount |
+| `POST /fees/price-impact/detailed` | Calculate detailed price impact with delta imbalance |
 
 ### Analytics
 
@@ -174,6 +177,25 @@ npm start
 | `POST /pda/position-request` | Generate position request PDA |
 | `POST /pda/borrow-position` | Generate borrow position PDA |
 | `GET /pda/perpetuals` | Get perpetuals global state PDA |
+
+### Transaction Simulation
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /simulation/simulate` | Simulate transaction and get detailed results |
+| `POST /simulation/estimate-cu` | Estimate compute units for a transaction |
+| `POST /simulation/estimate-fees` | Estimate transaction fees (base + priority) |
+| `POST /simulation/validate` | Validate transaction before signing |
+
+### Remaining Accounts
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /accounts/custody-metas` | Get all custody remaining accounts |
+| `GET /accounts/custody-metas/:token` | Get custody metas for specific token |
+| `GET /accounts/oracles` | Get all oracle account metadata |
+| `GET /accounts/remaining/:instruction` | Get remaining accounts for instruction type |
+| `GET /accounts/token-accounts` | Get custody token accounts |
 
 ### Trade (Write Endpoints)
 
@@ -372,6 +394,58 @@ curl -X POST http://localhost:3001/pda/position-request \
 
 # Get perpetuals global state PDA
 curl http://localhost:3001/pda/perpetuals
+
+# Calculate detailed price impact with delta imbalance
+curl -X POST http://localhost:3001/fees/price-impact/detailed \
+  -H "Content-Type: application/json" \
+  -d '{
+    "custody": "SOL",
+    "tradeSizeUsd": "1000000000",
+    "tradeType": "increase"
+  }'
+
+# Simulate a transaction
+curl -X POST http://localhost:3001/simulation/simulate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transaction": "BASE64_ENCODED_TRANSACTION"
+  }'
+
+# Estimate compute units
+curl -X POST http://localhost:3001/simulation/estimate-cu \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transaction": "BASE64_ENCODED_TRANSACTION"
+  }'
+
+# Estimate transaction fees
+curl -X POST http://localhost:3001/simulation/estimate-fees \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transaction": "BASE64_ENCODED_TRANSACTION"
+  }'
+
+# Validate transaction before signing
+curl -X POST http://localhost:3001/simulation/validate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transaction": "BASE64_ENCODED_TRANSACTION"
+  }'
+
+# Get all custody remaining accounts
+curl http://localhost:3001/accounts/custody-metas
+
+# Get custody metas for SOL
+curl http://localhost:3001/accounts/custody-metas/SOL
+
+# Get all oracle accounts
+curl http://localhost:3001/accounts/oracles
+
+# Get remaining accounts for increasePosition instruction
+curl http://localhost:3001/accounts/remaining/increasePosition
+
+# Get custody token accounts
+curl http://localhost:3001/accounts/token-accounts
 ```
 
 ## Vercel Deployment
