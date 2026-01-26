@@ -1,5 +1,5 @@
 import { BN } from "@coral-xyz/anchor";
-import Decimal from "decimal";
+import Decimal from "decimal.js";
 import { USDC_DECIMALS } from "../constants";
 import type { OraclePrice } from "../types";
 
