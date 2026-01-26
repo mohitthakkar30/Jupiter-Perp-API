@@ -14,18 +14,18 @@ interface BurnJlpBody {
 
 export async function jlpRoutes(fastify: FastifyInstance) {
   // Get JLP virtual price (already exists, moved here for organization)
-  fastify.get("/jlp/price", async (request, reply) => {
-    try {
-      const price = await getJlpVirtualPrice();
-      return { success: true, data: price };
-    } catch (error) {
-      fastify.log.error(error);
-      return reply.status(500).send({
-        success: false,
-        error: "Failed to fetch JLP price",
-      });
-    }
-  });
+  // fastify.get("/jlp/price", async (request, reply) => {
+  //   try {
+  //     const price = await getJlpVirtualPrice();
+  //     return { success: true, data: price };
+  //   } catch (error) {
+  //     fastify.log.error(error);
+  //     return reply.status(500).send({
+  //       success: false,
+  //       error: "Failed to fetch JLP price",
+  //     });
+  //   }
+  // });
 
   // Calculate JLP tokens received for depositing liquidity
   fastify.post<{ Body: MintJlpBody }>("/jlp/calculate-mint", async (request, reply) => {
