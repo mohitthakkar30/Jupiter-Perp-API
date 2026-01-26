@@ -1,15 +1,19 @@
 # Jupiter Perpetuals API
 
-A high-performance Fastify API for interacting with Jupiter Perpetuals on Solana. Fetch positions, pool data, oracle prices, and custody information from the Jupiter Perps protocol.
+A comprehensive Fastify API for interacting with Jupiter Perpetuals on Solana. Fetch positions, pool data, oracle prices, custody information, and build transactions for the Jupiter Perps protocol.
 
 ## Features
 
-- Fetch all open positions or filter by wallet
-- Get pool data including AUM and APY
-- Real-time oracle prices for SOL, ETH, BTC, USDC, USDT
-- Custody data for all supported tokens
-- Position PnL, liquidation price, and borrow fee calculations
-- **Build transactions to open/close perpetual positions**
+- **Positions**: Fetch all open positions, filter by wallet, calculate PnL, liquidation price, and borrow fees
+- **Pool & JLP**: Get pool data, AUM, APY, JLP virtual price, mint/burn calculations
+- **Prices**: Real-time oracle prices for SOL, ETH, BTC, USDC, USDT
+- **Custodies**: Complete custody data including funding rates and utilization
+- **Fees**: Calculate swap fees, price impact, and open/close position fees
+- **Analytics**: Global PnL tracking, detailed AUM breakdown, pool utilization
+- **Position Requests**: Track and manage pending position requests
+- **Borrow Positions**: Monitor borrow positions and rates
+- **Wallet Summary**: Complete portfolio overview for any wallet
+- **Trade**: Build unsigned transactions to open/close perpetual positions
 - Vercel-ready for serverless deployment
 
 ## Prerequisites
@@ -90,6 +94,61 @@ npm start
 |----------|-------------|
 | `GET /custodies` | Get all custody data |
 | `GET /custodies/:token` | Get specific custody data |
+| `GET /custodies/:token/funding-rate` | Get funding rate for a custody |
+| `GET /custodies/:token/utilization` | Get utilization for a custody |
+
+### Fees
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /fees/open-close-base` | Get base open/close fees for all custodies |
+| `GET /fees/open/:custody` | Get open position fee for a custody |
+| `GET /fees/close/:custody` | Get close position fee for a custody |
+| `POST /fees/price-impact` | Calculate price impact fee |
+| `POST /fees/swap` | Calculate swap fee and output amount |
+
+### Analytics
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /analytics/global-pnl/longs` | Get global unrealized PnL for all long positions |
+| `GET /analytics/global-pnl/shorts` | Get global unrealized PnL for all short positions |
+| `GET /analytics/global-pnl/estimate/longs` | Estimate global long PnL (faster) |
+| `GET /analytics/global-pnl/estimate/shorts` | Estimate global short PnL (faster) |
+| `GET /analytics/pool/aum/detailed` | Get detailed AUM breakdown by custody |
+| `GET /analytics/pool/utilization` | Get pool utilization by custody |
+
+### JLP
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /jlp/price` | Get JLP virtual price |
+| `POST /jlp/calculate-mint` | Calculate JLP tokens for deposit |
+| `POST /jlp/calculate-burn` | Calculate tokens for JLP burn |
+
+### Position Requests
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /position-requests` | Get all pending position requests |
+| `GET /position-requests/wallet/:wallet` | Get position requests by wallet |
+| `GET /position-requests/:pubkey` | Get specific position request |
+| `POST /position-requests/close` | Build transaction to close a position request |
+
+### Borrow
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /borrow/positions` | Get all borrow positions |
+| `GET /borrow/positions/wallet/:wallet` | Get borrow positions by wallet |
+| `GET /borrow/positions/:pubkey` | Get specific borrow position |
+| `GET /borrow/rates/:custody` | Get borrow rates for a custody |
+
+### Wallet
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /wallet/:wallet/summary` | Get complete wallet portfolio summary |
 
 ### Trade (Write Endpoints)
 
@@ -214,6 +273,41 @@ curl -X POST http://localhost:3001/trade/decrease-position \
     "desiredMint": "SOL",
     "entirePosition": true
   }'
+
+# Get funding rate for SOL
+curl http://localhost:3001/custodies/SOL/funding-rate
+
+# Get custody utilization
+curl http://localhost:3001/custodies/ETH/utilization
+
+# Calculate swap fee
+curl -X POST http://localhost:3001/fees/swap \
+  -H "Content-Type: application/json" \
+  -d '{
+    "inputToken": "SOL",
+    "outputToken": "USDC",
+    "amountIn": "1000000000"
+  }'
+
+# Get global PnL for longs
+curl http://localhost:3001/analytics/global-pnl/longs
+
+# Get detailed AUM breakdown
+curl http://localhost:3001/analytics/pool/aum/detailed
+
+# Calculate JLP mint amount
+curl -X POST http://localhost:3001/jlp/calculate-mint \
+  -H "Content-Type: application/json" \
+  -d '{
+    "inputToken": "SOL",
+    "inputAmount": "1000000000"
+  }'
+
+# Get wallet summary
+curl http://localhost:3001/wallet/YOUR_WALLET_ADDRESS/summary
+
+# Get borrow rates for SOL custody
+curl http://localhost:3001/borrow/rates/SOL
 ```
 
 ## Vercel Deployment
