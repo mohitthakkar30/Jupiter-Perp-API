@@ -1,5 +1,5 @@
 import { BN } from "@coral-xyz/anchor";
-import { PublicKey } from "@solana/web3";
+import { PublicKey } from "@solana/web3.js";
 import { getDovesProgram } from "../utils/solana";
 import { CUSTODY_PUBKEY, CUSTODY_DETAILS } from "../constants/index";
 import { BNToUSDRepresentation } from "../utils/formatting";
