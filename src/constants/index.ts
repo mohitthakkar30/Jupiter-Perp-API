@@ -1,5 +1,5 @@
 import { BN } from "@coral-xyz/anchor";
-import { PublicKey } from "@solana/web3";
+import { PublicKey } from "@solana/web3.js";
 
 // Program IDs
 export const JUPITER_PERPETUALS_PROGRAM_ID = new PublicKey(

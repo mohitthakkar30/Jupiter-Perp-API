@@ -1,5 +1,5 @@
 import { BN } from "@coral-xyz/anchor";
-import { PublicKey } from "@solana/web3";
+import { PublicKey } from "@solana/web3.js";
 import type { IdlAccounts } from "@coral-xyz/anchor";
 import type { Perpetuals } from "../idl/jupiter-perpetuals-idl";
 import { getPerpetualsProgram, getConnection } from "../utils/solana";

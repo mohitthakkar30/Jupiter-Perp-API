@@ -1,5 +1,5 @@
 import { BN } from "@coral-xyz/anchor";
-import { PublicKey } from "@solana/web3";
+import { PublicKey } from "@solana/web3.js";
 import { getMint } from "@solana/spl-token";
 import { getPerpetualsProgram, getConnection } from "../utils/solana";
 import {

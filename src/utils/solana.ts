@@ -1,5 +1,5 @@
 import { AnchorProvider, Program, Wallet } from "@coral-xyz/anchor";
-import { Connection, Keypair } from "@solana/web3";
+import { Connection, Keypair } from "@solana/web3.js";
 import { IDL, type Perpetuals } from "../idl/jupiter-perpetuals-idl";
 import { IDL as DovesIDL, type Doves } from "../idl/doves-idl";
 import {

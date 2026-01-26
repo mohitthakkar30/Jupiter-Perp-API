@@ -1,4 +1,4 @@
-import { PublicKey } from "@solana/web3";
+import { PublicKey } from "@solana/web3.js";
 import { getPerpetualsProgram } from "../utils/solana";
 import {
   CUSTODY_PUBKEY,
