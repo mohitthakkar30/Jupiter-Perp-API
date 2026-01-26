@@ -5,6 +5,7 @@ import {
   poolRoutes,
   priceRoutes,
   custodyRoutes,
+  tradeRoutes,
 } from "./routes";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -50,6 +51,33 @@ export async function buildApp(): Promise<FastifyInstance> {
           "GET /custodies": "Get all custodies",
           "GET /custodies/:token": "Get specific custody data",
         },
+        trade: {
+          "POST /trade/increase-position": {
+            description: "Build transaction to open/increase position",
+            body: {
+              owner: "string - Wallet address",
+              inputMint: "string - Token name (SOL, ETH, BTC, USDC, USDT)",
+              custody: "string - Position custody (token name or pubkey)",
+              collateralCustody: "string - Collateral custody (token name or pubkey)",
+              side: "string - 'long' or 'short'",
+              sizeUsd: "string - Position size in USD (6 decimals)",
+              collateralAmount: "string - Collateral amount in token decimals",
+              priceSlippage: "string (optional) - Slippage tolerance (default 0.3%)",
+            },
+          },
+          "POST /trade/decrease-position": {
+            description: "Build transaction to close/decrease position",
+            body: {
+              owner: "string - Wallet address",
+              positionPubkey: "string - Existing position pubkey",
+              desiredMint: "string - Output token name (SOL, ETH, BTC, USDC, USDT)",
+              entirePosition: "boolean (optional) - Close entire position (default true)",
+              sizeUsdDelta: "string (optional) - Partial close amount in USD",
+              collateralUsdDelta: "string (optional) - Collateral to withdraw",
+              priceSlippage: "string (optional) - Slippage tolerance",
+            },
+          },
+        },
       },
     };
   });
@@ -59,6 +87,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await fastify.register(poolRoutes);
   await fastify.register(priceRoutes);
   await fastify.register(custodyRoutes);
+  await fastify.register(tradeRoutes);
 
   return fastify;
 }

@@ -9,6 +9,7 @@ A high-performance Fastify API for interacting with Jupiter Perpetuals on Solana
 - Real-time oracle prices for SOL, ETH, BTC, USDC, USDT
 - Custody data for all supported tokens
 - Position PnL, liquidation price, and borrow fee calculations
+- **Build transactions to open/close perpetual positions**
 - Vercel-ready for serverless deployment
 
 ## Prerequisites
@@ -90,6 +91,89 @@ npm start
 | `GET /custodies` | Get all custody data |
 | `GET /custodies/:token` | Get specific custody data |
 
+### Trade (Write Endpoints)
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /trade/increase-position` | Build transaction to open/increase a position |
+| `POST /trade/decrease-position` | Build transaction to close/decrease a position |
+
+#### POST /trade/increase-position
+
+Build an unsigned transaction to open or increase a perpetual position.
+
+**Request Body:**
+```json
+{
+  "owner": "wallet_address",
+  "inputMint": "SOL",
+  "custody": "SOL",
+  "collateralCustody": "SOL",
+  "side": "long",
+  "sizeUsd": "1000000000",
+  "collateralAmount": "100000000",
+  "priceSlippage": "300000"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `owner` | string | Yes | Wallet address |
+| `inputMint` | string | Yes | Token name (SOL, ETH, BTC, USDC, USDT) |
+| `custody` | string | Yes | Position custody (token name or pubkey) |
+| `collateralCustody` | string | Yes | Collateral custody (token name or pubkey) |
+| `side` | string | Yes | Position direction: "long" or "short" |
+| `sizeUsd` | string | Yes | Position size in USD (6 decimals) |
+| `collateralAmount` | string | Yes | Collateral amount in token decimals |
+| `priceSlippage` | string | No | Slippage tolerance (default 0.3%) |
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "transaction": "base64_encoded_transaction",
+    "positionPda": "position_pubkey",
+    "positionRequestPda": "position_request_pubkey"
+  }
+}
+```
+
+#### POST /trade/decrease-position
+
+Build an unsigned transaction to close or decrease a perpetual position.
+
+**Request Body:**
+```json
+{
+  "owner": "wallet_address",
+  "positionPubkey": "existing_position_pubkey",
+  "desiredMint": "SOL",
+  "entirePosition": true
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `owner` | string | Yes | Wallet address |
+| `positionPubkey` | string | Yes | Existing position pubkey |
+| `desiredMint` | string | Yes | Output token name (SOL, ETH, BTC, USDC, USDT) |
+| `entirePosition` | boolean | No | Close entire position (default true) |
+| `sizeUsdDelta` | string | No | Partial close amount in USD |
+| `collateralUsdDelta` | string | No | Collateral to withdraw |
+| `priceSlippage` | string | No | Slippage tolerance |
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "transaction": "base64_encoded_transaction",
+    "positionRequestPda": "position_request_pubkey"
+  }
+}
+```
+
 ## Example Requests
 
 ```bash
@@ -107,6 +191,29 @@ curl http://localhost:3001/positions/YOUR_WALLET_ADDRESS
 
 # Get custody data for ETH
 curl http://localhost:3001/custodies/ETH
+
+# Open a long position (returns unsigned transaction)
+curl -X POST http://localhost:3001/trade/increase-position \
+  -H "Content-Type: application/json" \
+  -d '{
+    "owner": "YOUR_WALLET_ADDRESS",
+    "inputMint": "SOL",
+    "custody": "SOL",
+    "collateralCustody": "SOL",
+    "side": "long",
+    "sizeUsd": "100000000",
+    "collateralAmount": "1000000000"
+  }'
+
+# Close a position (returns unsigned transaction)
+curl -X POST http://localhost:3001/trade/decrease-position \
+  -H "Content-Type: application/json" \
+  -d '{
+    "owner": "YOUR_WALLET_ADDRESS",
+    "positionPubkey": "YOUR_POSITION_PUBKEY",
+    "desiredMint": "SOL",
+    "entirePosition": true
+  }'
 ```
 
 ## Vercel Deployment

@@ -26,6 +26,8 @@ const start = async () => {
 ║    GET  /prices/:token - Specific token price          ║
 ║    GET  /custodies     - All custody data              ║
 ║    GET  /custodies/:token - Specific custody           ║
+║    POST /trade/increase-position - Open/increase pos   ║
+║    POST /trade/decrease-position - Close/decrease pos  ║
 ╚════════════════════════════════════════════════════════╝
     `);
   } catch (err) {
