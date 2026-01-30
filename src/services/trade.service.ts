@@ -205,6 +205,15 @@ export async function buildIncreasePositionTransaction(
     transaction.add(syncNativeIx);
   }
 
+  // Create position request ATA if it doesn't exist (required by Jupiter program)
+  const createPositionRequestAtaIx = createAssociatedTokenAccountIdempotentInstruction(
+    ownerPubkey, // payer
+    positionRequestAta, // ata to create
+    positionRequestPda, // owner (the PDA)
+    collateralCustodyDetails.mint // mint
+  );
+  transaction.add(createPositionRequestAtaIx);
+
   // Add the main instruction
   transaction.add(instruction);
 
