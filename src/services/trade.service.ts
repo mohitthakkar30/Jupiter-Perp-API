@@ -9,6 +9,9 @@ import {
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddressSync,
+  createAssociatedTokenAccountIdempotentInstruction,
+  createSyncNativeInstruction,
+  NATIVE_MINT,
 } from "@solana/spl-token";
 import { getPerpetualsProgram, getConnection } from "../utils/solana";
 import {
@@ -173,7 +176,37 @@ export async function buildIncreasePositionTransaction(
     feePayer: ownerPubkey,
     blockhash,
     lastValidBlockHeight,
-  }).add(instruction);
+  });
+
+  // If input is native SOL, add wrapping instructions
+  const isNativeSol = inputMint.equals(NATIVE_MINT);
+  if (isNativeSol) {
+    const collateralLamports = new BN(params.collateralAmount);
+
+    // 1. Create wSOL ATA if it doesn't exist (idempotent - won't fail if exists)
+    const createAtaIx = createAssociatedTokenAccountIdempotentInstruction(
+      ownerPubkey, // payer
+      fundingAccount, // ata
+      ownerPubkey, // owner
+      NATIVE_MINT // mint
+    );
+    transaction.add(createAtaIx);
+
+    // 2. Transfer native SOL to the wSOL ATA
+    const transferIx = SystemProgram.transfer({
+      fromPubkey: ownerPubkey,
+      toPubkey: fundingAccount,
+      lamports: collateralLamports.toNumber(),
+    });
+    transaction.add(transferIx);
+
+    // 3. Sync native instruction - this "wraps" the SOL by updating the token account balance
+    const syncNativeIx = createSyncNativeInstruction(fundingAccount);
+    transaction.add(syncNativeIx);
+  }
+
+  // Add the main instruction
+  transaction.add(instruction);
 
   // Serialize without signing
   const serializedTx = transaction
