@@ -11,6 +11,7 @@ import {
   getAssociatedTokenAddressSync,
   createAssociatedTokenAccountIdempotentInstruction,
   createSyncNativeInstruction,
+  createCloseAccountInstruction,
   NATIVE_MINT,
 } from "@solana/spl-token";
 import { getPerpetualsProgram, getConnection } from "../utils/solana";
@@ -28,9 +29,46 @@ import {
   TOKEN_TO_CUSTODY,
 } from "../constants";
 import { getPositionData } from "./position.service";
+import { getOraclePriceForCustody } from "./oracle.service";
 
-// Default slippage: 0.3% = 30 basis points = 30 * 10^4 (6 decimals)
-const DEFAULT_PRICE_SLIPPAGE = new BN(300_000);
+// Default slippage: 1% = 100 basis points
+const DEFAULT_SLIPPAGE_BPS = 100;
+
+// Calculate the actual price slippage value based on current oracle price
+// For LONG: max acceptable price = currentPrice * (1 + slippagePct)
+// For SHORT: min acceptable price = currentPrice * (1 - slippagePct)
+async function calculatePriceSlippage(
+  custodyPubkey: string,
+  side: "long" | "short",
+  slippageBps: number = DEFAULT_SLIPPAGE_BPS
+): Promise<BN> {
+  const oraclePrice = await getOraclePriceForCustody(custodyPubkey);
+
+  if (!oraclePrice || oraclePrice.price.isZero()) {
+    // Fallback: use a very high/low price to avoid rejection
+    // This is a safety net - should rarely happen
+    console.warn(`Could not fetch oracle price for ${custodyPubkey}, using fallback`);
+    return side === "long"
+      ? new BN("999999999999") // Very high price for longs
+      : new BN("1"); // Very low price for shorts
+  }
+
+  // Price is already in 6 decimals from oracle
+  const currentPrice = oraclePrice.price;
+
+  // Calculate slippage multiplier (e.g., 100 BPS = 1% = 0.01)
+  // We use basis points for precision: 100 BPS = 1%
+  // Formula: price * (10000 + slippageBps) / 10000 for long
+  //          price * (10000 - slippageBps) / 10000 for short
+
+  if (side === "long") {
+    // For longs, we're buying - max acceptable price is higher
+    return currentPrice.muln(10000 + slippageBps).divn(10000);
+  } else {
+    // For shorts, we're selling - min acceptable price is lower
+    return currentPrice.muln(10000 - slippageBps).divn(10000);
+  }
+}
 
 export interface IncreasePositionParams {
   owner: string;
@@ -133,9 +171,17 @@ export async function buildIncreasePositionTransaction(
   // Build params
   const sizeUsdDelta = new BN(params.sizeUsd);
   const collateralTokenDelta = new BN(params.collateralAmount);
-  const priceSlippage = params.priceSlippage
-    ? new BN(params.priceSlippage)
-    : DEFAULT_PRICE_SLIPPAGE;
+
+  // Calculate price slippage based on current oracle price
+  // priceSlippage is the max/min acceptable price, NOT a percentage
+  const slippageBps = params.priceSlippage
+    ? parseInt(params.priceSlippage)
+    : DEFAULT_SLIPPAGE_BPS;
+  const priceSlippage = await calculatePriceSlippage(
+    custodyPubkey.toString(),
+    params.side,
+    slippageBps
+  );
 
   const side = params.side === "long" ? { long: {} } : { short: {} };
 
@@ -205,18 +251,29 @@ export async function buildIncreasePositionTransaction(
     transaction.add(syncNativeIx);
   }
 
-  // Create position request ATA (defensive - ensures account exists for keeper execution)
-  // This prevents intermittent keeper failures with error 3012 "account not initialized"
+  // Create position request ATA - the keeper needs this account to exist when executing the position
+  // This must be created BEFORE the Jupiter instruction which will transfer tokens to it
   const createPositionRequestAtaIx = createAssociatedTokenAccountIdempotentInstruction(
     ownerPubkey, // payer
     positionRequestAta, // ata to create
     positionRequestPda, // owner (the PDA)
-    inputMint // mint - must match the inputMint being transferred
+    inputMint // mint
   );
   transaction.add(createPositionRequestAtaIx);
 
   // Add the main instruction
   transaction.add(instruction);
+
+  // If input is native SOL, close wSOL ATA after the trade to return rent to owner
+  // This matches the official Jupiter example which includes closeAccountInstruction as post-instruction
+  if (isNativeSol) {
+    const closeWsolAtaIx = createCloseAccountInstruction(
+      fundingAccount, // account to close
+      ownerPubkey,    // destination for rent
+      ownerPubkey     // authority
+    );
+    transaction.add(closeWsolAtaIx);
+  }
 
   // Serialize without signing
   const serializedTx = transaction
@@ -269,12 +326,10 @@ export async function buildDecreasePositionTransaction(
     ownerPubkey
   );
 
-  // Get position request ATA
-  const collateralCustodyDetails = getCustodyDetailsByPubkey(
-    collateralCustodyPubkey.toString()
-  );
+  // Get position request ATA - must use desiredMint, not collateral mint
+  // The positionRequestAta holds tokens being transferred out during close
   const positionRequestAta = getAssociatedTokenAddressSync(
-    collateralCustodyDetails.mint,
+    desiredMint,
     positionRequestPda,
     true
   );
@@ -286,11 +341,28 @@ export async function buildDecreasePositionTransaction(
   const sizeUsdDelta = params.sizeUsdDelta
     ? new BN(params.sizeUsdDelta)
     : new BN(0);
-  const priceSlippage = params.priceSlippage
-    ? new BN(params.priceSlippage)
-    : DEFAULT_PRICE_SLIPPAGE;
+
   const entirePosition =
     params.entirePosition !== undefined ? params.entirePosition : true;
+
+
+  // For partial close, calculate based on current price with reasonable slippage
+  let priceSlippage: BN;
+  if (entirePosition) {
+    priceSlippage = new BN("100000000000");
+  } else {
+    // For partial close, calculate based on current price
+    const isLong = positionData.side.long !== undefined;
+    const slippageSide = isLong ? "short" : "long";
+    const slippageBps = params.priceSlippage
+      ? parseInt(params.priceSlippage)
+      : 500; // 5% for partial close
+    priceSlippage = await calculatePriceSlippage(
+      custodyPubkey.toString(),
+      slippageSide,
+      slippageBps
+    );
+  }
 
   // Build instruction
   const instruction = await program.methods
@@ -329,7 +401,32 @@ export async function buildDecreasePositionTransaction(
     feePayer: ownerPubkey,
     blockhash,
     lastValidBlockHeight,
-  }).add(instruction);
+  });
+
+  // Check if output is native SOL
+  const isNativeSol = desiredMint.equals(NATIVE_MINT);
+
+  // Create receiving account ATA if it doesn't exist (idempotent)
+  const createReceivingAtaIx = createAssociatedTokenAccountIdempotentInstruction(
+    ownerPubkey, // payer
+    receivingAccount, // ata
+    ownerPubkey, // owner
+    desiredMint // mint
+  );
+  transaction.add(createReceivingAtaIx);
+
+  // Add the main instruction
+  transaction.add(instruction);
+
+  // If output is native SOL, close wSOL ATA to unwrap and return SOL to owner
+  if (isNativeSol) {
+    const closeWsolAtaIx = createCloseAccountInstruction(
+      receivingAccount, // account to close
+      ownerPubkey,      // destination for rent + SOL
+      ownerPubkey       // authority
+    );
+    transaction.add(closeWsolAtaIx);
+  }
 
   // Serialize without signing
   const serializedTx = transaction
