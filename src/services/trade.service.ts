@@ -123,9 +123,9 @@ export async function buildIncreasePositionTransaction(
   // Get owner's funding account (ATA for input token)
   const fundingAccount = getAssociatedTokenAddressSync(inputMint, ownerPubkey);
 
-  // Get position request ATA (for collateral)
+  // Get position request ATA (for input token - this holds the tokens being transferred in)
   const positionRequestAta = getAssociatedTokenAddressSync(
-    collateralCustodyDetails.mint,
+    inputMint,
     positionRequestPda,
     true // allowOwnerOffCurve for PDA
   );
@@ -210,7 +210,7 @@ export async function buildIncreasePositionTransaction(
     ownerPubkey, // payer
     positionRequestAta, // ata to create
     positionRequestPda, // owner (the PDA)
-    collateralCustodyDetails.mint // mint
+    inputMint // mint - must match the inputMint being transferred
   );
   transaction.add(createPositionRequestAtaIx);
 
