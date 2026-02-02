@@ -205,8 +205,17 @@ export async function buildIncreasePositionTransaction(
     transaction.add(syncNativeIx);
   }
 
+  // Create position request ATA (defensive - ensures account exists for keeper execution)
+  // This prevents intermittent keeper failures with error 3012 "account not initialized"
+  const createPositionRequestAtaIx = createAssociatedTokenAccountIdempotentInstruction(
+    ownerPubkey, // payer
+    positionRequestAta, // ata to create
+    positionRequestPda, // owner (the PDA)
+    inputMint // mint - must match the inputMint being transferred
+  );
+  transaction.add(createPositionRequestAtaIx);
+
   // Add the main instruction
-  // Note: Jupiter's program internally creates the positionRequestAta via associatedTokenProgram
   transaction.add(instruction);
 
   // Serialize without signing
